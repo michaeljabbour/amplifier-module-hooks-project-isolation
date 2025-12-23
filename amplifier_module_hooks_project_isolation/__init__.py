@@ -58,13 +58,14 @@ class _ProjectIsolationHandler:
         self.storage_base = storage_base
         self.create_dirs = create_dirs
 
-    async def on_session_start(self, context: dict) -> dict:
+    async def on_session_start(self, event: str, context: dict) -> dict:
         """
         Hook handler called when a session starts.
 
         Detects the current project and sets the storage path accordingly.
 
         Args:
+            event: Event name (always "session:start")
             context: Session context dictionary
 
         Returns:

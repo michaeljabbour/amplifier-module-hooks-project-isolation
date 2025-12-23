@@ -127,7 +127,7 @@ class TestSessionHandler:
         with patch('pathlib.Path.cwd') as mock_cwd:
             mock_cwd.return_value = Path("/test/project")
 
-            result = await handler.on_session_start(session_context)
+            result = await handler.on_session_start("session:start", session_context)
 
             assert "storage_path" in result
             assert "project_root" in result
@@ -143,7 +143,7 @@ class TestSessionHandler:
         with patch('pathlib.Path.cwd') as mock_cwd:
             mock_cwd.return_value = Path("/test/project")
 
-            await handler.on_session_start(session_context)
+            await handler.on_session_start("session:start", session_context)
 
             expected_path = storage_base / "project" / "sessions"
             assert expected_path.exists()
@@ -157,7 +157,7 @@ class TestSessionHandler:
         with patch('pathlib.Path.cwd') as mock_cwd:
             mock_cwd.return_value = Path("/test/project")
 
-            await handler.on_session_start(session_context)
+            await handler.on_session_start("session:start", session_context)
 
             expected_path = storage_base / "project" / "sessions"
             assert not expected_path.exists()
@@ -171,7 +171,7 @@ class TestSessionHandler:
         with patch.object(handler, '_get_git_root') as mock_git:
             mock_git.return_value = Path("/repo/my-app")
 
-            result = await handler.on_session_start(session_context)
+            result = await handler.on_session_start("session:start", session_context)
 
             assert result["project_slug"] == "my-app"
             assert result["project_root"] == "/repo/my-app"
