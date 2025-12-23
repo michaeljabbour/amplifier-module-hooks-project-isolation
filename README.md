@@ -85,70 +85,165 @@ create_dirs: false  # Manual directory management
 # Project A
 cd ~/projects/api-server/
 amp chat
-# Sessions stored in: ~/.amplifier/projects/api-server/sessions/
+# Sessions stored in: ~/.amplifier/projects/api-server-a3f9d2/sessions/
 
 # Project B
 cd ~/projects/frontend-app/
 amp chat
-# Sessions stored in: ~/.amplifier/projects/frontend-app/sessions/
+# Sessions stored in: ~/.amplifier/projects/frontend-app-7b2e8c/sessions/
 ```
 
-Each project maintains separate history.
+Each project maintains separate history with collision-proof directory names.
 
 ### Scenario 2: Non-Git Projects
 
 ```bash
 cd ~/scratch/experiment/
 amp chat
-# Sessions stored in: ~/.amplifier/projects/experiment/sessions/
+# Sessions stored in: ~/.amplifier/projects/experiment-9d4f1a/sessions/
 ```
 
-Uses directory name even without git.
+Uses directory name even without git, with path hash for uniqueness.
 
 ### Scenario 3: Nested Git Repos
 
 ```bash
 cd ~/monorepo/packages/service-a/
 amp chat
-# Sessions stored in: ~/.amplifier/projects/monorepo/sessions/
+# Sessions stored in: ~/.amplifier/projects/monorepo-c5e2b9/sessions/
 ```
 
-Uses root repository name for consistency.
+Uses root repository name for consistency, with unique hash.
 
-## Project Slug Generation
+### Scenario 4: Same Project Name, Different Locations
 
-The module generates URL-safe slugs from project directory names:
+```bash
+# First "myapp" project
+cd ~/projects/myapp/
+amp chat
+# Sessions stored in: ~/.amplifier/projects/myapp-a3f9d2/sessions/
 
-| Directory Name | Generated Slug |
-|----------------|----------------|
+# Second "myapp" project (different location)
+cd ~/work/myapp/
+amp chat
+# Sessions stored in: ~/.amplifier/projects/myapp-7b2e8c/sessions/
+```
+
+Different paths generate different hashes, preventing collisions.
+
+## Collision-Proof Directory Naming
+
+The module uses a hybrid approach that combines readability with collision-proofing:
+
+**Format:** `{slug}-{hash}/`
+
+- **Slug**: Human-readable, URL-safe project name
+- **Hash**: First 6 characters of SHA-256 hash of full project path
+- **Result**: Both readable AND collision-proof
+
+### Examples
+
+| Project Path | Directory Name |
+|--------------|----------------|
+| `/Users/dev/api-server` | `api-server-a3f9d2` |
+| `/Users/dev/My Project` | `my-project-7b2e8c` |
+| `/home/work/api-server` | `api-server-9d4f1a` (different hash!) |
+
+### Slug Generation Rules
+
+The readable slug portion follows these transformation rules:
+
+| Original Name | Slug |
+|---------------|------|
 | `api-server` | `api-server` |
 | `My Project` | `my-project` |
 | `Project_Name` | `project-name` |
-| `project@v2` | `project-v2` |
+| `project@v2` | `projectv2` |
+| `!!!` | `default` |
 
 Slugs are:
 - Lowercase
-- Alphanumeric + hyphens only
-- No special characters
-- Human-readable
+- Spaces and underscores → hyphens
+- Special characters removed
+- Duplicate hyphens collapsed
+- Leading/trailing hyphens trimmed
+- Falls back to "default" if empty
 
 ## Directory Structure
 
-When using default configuration, sessions are organized as:
+Each project gets a dedicated directory with metadata and session tracking:
 
 ```
 ~/.amplifier/projects/
-├── api-server/
-│   └── sessions/
+├── api-server-a3f9d2/              # Collision-proof directory name
+│   ├── metadata.json                # Project metadata
+│   ├── index.json                   # Session index
+│   └── sessions/                    # Session storage
 │       ├── session-123.jsonl
 │       └── session-456.jsonl
-├── frontend-app/
+├── frontend-app-7b2e8c/
+│   ├── metadata.json
+│   ├── index.json
 │   └── sessions/
 │       └── session-789.jsonl
-└── experiment/
+└── experiment-9d4f1a/
+    ├── metadata.json
+    ├── index.json
     └── sessions/
         └── session-abc.jsonl
 ```
+
+### metadata.json
+
+Each project directory contains a `metadata.json` file with project information:
+
+```json
+{
+  "full_path": "/Users/dev/projects/api-server",
+  "slug": "api-server",
+  "git_remote": "https://github.com/user/api-server.git",
+  "git_branch": "main",
+  "purpose": "Amplifier CLI session",
+  "first_seen": "2025-12-23T01:30:00.000000",
+  "last_accessed": "2025-12-23T02:15:00.000000"
+}
+```
+
+**Fields:**
+- `full_path`: Absolute path to the project directory
+- `slug`: Human-readable slug generated from directory name
+- `git_remote`: Git remote URL (if in a git repository)
+- `git_branch`: Current git branch (if in a git repository)
+- `purpose`: Session purpose from context (default: "Amplifier CLI session")
+- `first_seen`: ISO timestamp of first session
+- `last_accessed`: ISO timestamp of most recent session (updated each time)
+
+### index.json
+
+Each project directory maintains an `index.json` file tracking all sessions:
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "session-456",
+      "timestamp": "2025-12-23T02:15:00.000000",
+      "message_count": 15
+    },
+    {
+      "session_id": "session-123",
+      "timestamp": "2025-12-23T01:30:00.000000",
+      "message_count": 8
+    }
+  ]
+}
+```
+
+**Features:**
+- Sessions sorted by timestamp (most recent first)
+- Tracks session ID, timestamp, and message count
+- Appended to on each session start
+- Provides historical view of project activity
 
 ## Architecture
 

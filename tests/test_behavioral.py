@@ -148,7 +148,11 @@ class TestSessionHandler:
 
             await handler.on_session_start("session:start", session_context)
 
-            expected_path = storage_base / "project" / "sessions"
+            # Should create directory with pattern: project-<hash>/sessions
+            project_dirs = list(storage_base.glob("project-*"))
+            assert len(project_dirs) == 1
+
+            expected_path = project_dirs[0] / "sessions"
             assert expected_path.exists()
 
     @pytest.mark.asyncio
@@ -162,8 +166,8 @@ class TestSessionHandler:
 
             await handler.on_session_start("session:start", session_context)
 
-            expected_path = storage_base / "project" / "sessions"
-            assert not expected_path.exists()
+            # No directories should be created
+            assert not storage_base.exists()
 
     @pytest.mark.asyncio
     async def test_on_session_start_with_git_root(self, tmp_path, session_context):
@@ -178,3 +182,196 @@ class TestSessionHandler:
 
             assert session_context["project_slug"] == "my-app"
             assert session_context["project_root"] == "/repo/my-app"
+
+
+class TestCollisionProofNaming:
+    """Test collision-proof directory naming."""
+
+    def test_generate_path_hash(self):
+        """Test that path hash is generated correctly."""
+        handler = _ProjectIsolationHandler(True, Path("/tmp"), True)
+
+        # Same path should always generate same hash
+        hash1 = handler._generate_path_hash("/test/project")
+        hash2 = handler._generate_path_hash("/test/project")
+        assert hash1 == hash2
+
+        # Different paths should generate different hashes
+        hash3 = handler._generate_path_hash("/different/project")
+        assert hash1 != hash3
+
+        # Hash should be 6 characters
+        assert len(hash1) == 6
+
+    @pytest.mark.asyncio
+    async def test_collision_proof_directory_names(self, tmp_path, session_context):
+        """Test that directory names include collision-proof hash."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/test/project")
+
+            await handler.on_session_start("session:start", session_context)
+
+            # Should have project_dir_name in context
+            assert "project_dir_name" in session_context
+
+            # Should follow pattern: slug-hash
+            dir_name = session_context["project_dir_name"]
+            assert "-" in dir_name
+
+            parts = dir_name.split("-")
+            assert len(parts) == 2
+            assert parts[0] == "project"  # slug
+            assert len(parts[1]) == 6     # hash
+
+    @pytest.mark.asyncio
+    async def test_different_paths_same_name_no_collision(self, tmp_path, session_context):
+        """Test that projects with same name but different paths don't collide."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        # First project at /path1/myapp
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/path1/myapp")
+
+            context1 = session_context.copy()
+            await handler.on_session_start("session:start", context1)
+            dir_name1 = context1["project_dir_name"]
+
+        # Second project at /path2/myapp
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/path2/myapp")
+
+            context2 = session_context.copy()
+            await handler.on_session_start("session:start", context2)
+            dir_name2 = context2["project_dir_name"]
+
+        # Both should have same slug but different hashes
+        assert dir_name1.startswith("myapp-")
+        assert dir_name2.startswith("myapp-")
+        assert dir_name1 != dir_name2
+
+
+class TestMetadataAndIndexing:
+    """Test metadata and indexing functionality."""
+
+    @pytest.mark.asyncio
+    async def test_metadata_file_created(self, tmp_path, session_context):
+        """Test that metadata.json is created on first session."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/test/project")
+
+            await handler.on_session_start("session:start", session_context)
+
+            # Find the project directory
+            project_dirs = list(storage_base.glob("project-*"))
+            assert len(project_dirs) == 1
+
+            metadata_file = project_dirs[0] / "metadata.json"
+            assert metadata_file.exists()
+
+            # Verify metadata content
+            import json
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+
+            assert metadata["full_path"] == "/test/project"
+            assert metadata["slug"] == "project"
+            assert "first_seen" in metadata
+            assert "last_accessed" in metadata
+
+    @pytest.mark.asyncio
+    async def test_metadata_updated_on_subsequent_sessions(self, tmp_path, session_context):
+        """Test that metadata.json is updated on subsequent sessions."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/test/project")
+
+            # First session
+            await handler.on_session_start("session:start", session_context)
+
+            # Get first_seen timestamp
+            project_dirs = list(storage_base.glob("project-*"))
+            metadata_file = project_dirs[0] / "metadata.json"
+
+            import json
+            with open(metadata_file, 'r') as f:
+                metadata1 = json.load(f)
+
+            first_seen1 = metadata1["first_seen"]
+
+            # Wait a moment
+            import time
+            time.sleep(0.01)
+
+            # Second session
+            await handler.on_session_start("session:start", session_context)
+
+            # Verify first_seen unchanged but last_accessed updated
+            with open(metadata_file, 'r') as f:
+                metadata2 = json.load(f)
+
+            assert metadata2["first_seen"] == first_seen1
+            assert metadata2["last_accessed"] != metadata1["last_accessed"]
+
+    @pytest.mark.asyncio
+    async def test_index_file_created(self, tmp_path, session_context):
+        """Test that index.json is created and tracks sessions."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/test/project")
+
+            await handler.on_session_start("session:start", session_context)
+
+            # Find the project directory
+            project_dirs = list(storage_base.glob("project-*"))
+            index_file = project_dirs[0] / "index.json"
+            assert index_file.exists()
+
+            # Verify index content
+            import json
+            with open(index_file, 'r') as f:
+                index = json.load(f)
+
+            assert "sessions" in index
+            assert len(index["sessions"]) == 1
+            assert "session_id" in index["sessions"][0]
+            assert "timestamp" in index["sessions"][0]
+
+    @pytest.mark.asyncio
+    async def test_index_tracks_multiple_sessions(self, tmp_path, session_context):
+        """Test that index.json tracks multiple sessions."""
+        storage_base = tmp_path / "storage"
+        handler = _ProjectIsolationHandler(False, storage_base, True)
+
+        with patch('pathlib.Path.cwd') as mock_cwd:
+            mock_cwd.return_value = Path("/test/project")
+
+            # Three sessions
+            for i in range(3):
+                ctx = session_context.copy()
+                ctx["session_id"] = f"session-{i}"
+                await handler.on_session_start("session:start", ctx)
+
+            # Verify all sessions tracked
+            project_dirs = list(storage_base.glob("project-*"))
+            index_file = project_dirs[0] / "index.json"
+
+            import json
+            with open(index_file, 'r') as f:
+                index = json.load(f)
+
+            assert len(index["sessions"]) == 3
+
+            # Verify sessions are sorted by timestamp (most recent first)
+            timestamps = [s["timestamp"] for s in index["sessions"]]
+            assert timestamps == sorted(timestamps, reverse=True)
