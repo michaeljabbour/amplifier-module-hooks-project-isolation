@@ -1,0 +1,43 @@
+[project]
+name = "amplifier-module-hooks-project-isolation"
+version = "1.0.0"
+description = "Per-project session storage for Amplifier CLI applications"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Michael Jabbour", email = "michael@example.com" }
+]
+keywords = ["amplifier", "cli", "session", "project", "isolation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.entry-points."amplifier.modules"]
+project-isolation = "amplifier_module_hooks_project_isolation:mount"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["amplifier_module_hooks_project_isolation"]
