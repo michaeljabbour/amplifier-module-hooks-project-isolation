@@ -11,6 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from amplifier_core.models import HookResult
+
 __version__ = "1.0.0"
 __amplifier_module_type__ = "hook"
 
@@ -58,16 +60,19 @@ class _ProjectIsolationHandler:
         self.storage_base = storage_base
         self.create_dirs = create_dirs
 
-    async def on_session_start(self, event: str, context: dict) -> None:
+    async def on_session_start(self, event: str, context: dict) -> HookResult:
         """
         Hook handler called when a session starts.
 
         Detects the current project and sets the storage path accordingly.
-        Modifies context in place.
+        Modifies context in place and returns HookResult.
 
         Args:
             event: Event name (always "session:start")
             context: Session context dictionary (modified in place)
+
+        Returns:
+            HookResult with action="continue"
         """
         # Detect project root
         project_root = self._detect_project_root()
@@ -86,6 +91,9 @@ class _ProjectIsolationHandler:
         context["storage_path"] = str(storage_path)
         context["project_root"] = str(project_root)
         context["project_slug"] = project_slug
+
+        # Return success
+        return HookResult(action="continue")
 
     def _detect_project_root(self) -> Path:
         """

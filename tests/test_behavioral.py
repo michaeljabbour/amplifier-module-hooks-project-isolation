@@ -5,6 +5,7 @@ Behavioral tests for project isolation module.
 import pytest
 from pathlib import Path
 from unittest.mock import patch, Mock
+from amplifier_core.models import HookResult
 from amplifier_module_hooks_project_isolation import _ProjectIsolationHandler
 
 
@@ -127,8 +128,10 @@ class TestSessionHandler:
         with patch('pathlib.Path.cwd') as mock_cwd:
             mock_cwd.return_value = Path("/test/project")
 
-            await handler.on_session_start("session:start", session_context)
+            result = await handler.on_session_start("session:start", session_context)
 
+            assert isinstance(result, HookResult)
+            assert result.action == "continue"
             assert "storage_path" in session_context
             assert "project_root" in session_context
             assert "project_slug" in session_context
