@@ -127,12 +127,12 @@ class TestSessionHandler:
         with patch('pathlib.Path.cwd') as mock_cwd:
             mock_cwd.return_value = Path("/test/project")
 
-            result = await handler.on_session_start("session:start", session_context)
+            await handler.on_session_start("session:start", session_context)
 
-            assert "storage_path" in result
-            assert "project_root" in result
-            assert "project_slug" in result
-            assert result["project_slug"] == "project"
+            assert "storage_path" in session_context
+            assert "project_root" in session_context
+            assert "project_slug" in session_context
+            assert session_context["project_slug"] == "project"
 
     @pytest.mark.asyncio
     async def test_on_session_start_creates_directories(self, tmp_path, session_context):
@@ -171,7 +171,7 @@ class TestSessionHandler:
         with patch.object(handler, '_get_git_root') as mock_git:
             mock_git.return_value = Path("/repo/my-app")
 
-            result = await handler.on_session_start("session:start", session_context)
+            await handler.on_session_start("session:start", session_context)
 
-            assert result["project_slug"] == "my-app"
-            assert result["project_root"] == "/repo/my-app"
+            assert session_context["project_slug"] == "my-app"
+            assert session_context["project_root"] == "/repo/my-app"

@@ -58,18 +58,16 @@ class _ProjectIsolationHandler:
         self.storage_base = storage_base
         self.create_dirs = create_dirs
 
-    async def on_session_start(self, event: str, context: dict) -> dict:
+    async def on_session_start(self, event: str, context: dict) -> None:
         """
         Hook handler called when a session starts.
 
         Detects the current project and sets the storage path accordingly.
+        Modifies context in place.
 
         Args:
             event: Event name (always "session:start")
-            context: Session context dictionary
-
-        Returns:
-            Modified context with project-specific storage path
+            context: Session context dictionary (modified in place)
         """
         # Detect project root
         project_root = self._detect_project_root()
@@ -84,12 +82,10 @@ class _ProjectIsolationHandler:
         if self.create_dirs:
             storage_path.mkdir(parents=True, exist_ok=True)
 
-        # Set storage path in context
+        # Set storage path in context (modified in place)
         context["storage_path"] = str(storage_path)
         context["project_root"] = str(project_root)
         context["project_slug"] = project_slug
-
-        return context
 
     def _detect_project_root(self) -> Path:
         """
